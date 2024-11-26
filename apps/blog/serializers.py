@@ -10,11 +10,13 @@ class CategorySerializer(serializers.ModelSerializer):
 
 
 class CategoryListSerializer(serializers.ModelSerializer):
+    thumbnail = MediaSerializer()
     class Meta:
         model = Category
         fields = [
             'name',
-            'slug'
+            'slug',
+            'thumbnail'
         ]
 
 
@@ -46,7 +48,7 @@ class PostSerializer(serializers.ModelSerializer):
         fields = "__all__"
     
     def get_view_count(self, obj):
-        return obj.post_view.count()
+        return obj.post_analytics.views if obj.post_analytics else 0
 
 
 class PostListSerializer(serializers.ModelSerializer):
@@ -67,7 +69,7 @@ class PostListSerializer(serializers.ModelSerializer):
         ]
 
     def get_view_count(self, obj):
-        return obj.post_view.count()
+        return obj.post_analytics.views if obj.post_analytics else 0
 
 
 

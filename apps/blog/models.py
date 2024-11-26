@@ -6,9 +6,7 @@ from django.dispatch import receiver
 from django.utils import timezone
 from django.utils.text import slugify
 from django.utils.html import format_html
-
 from ckeditor.fields import RichTextField
-from core.storage_backends import PublicMediaStorage
 
 from apps.media.models import Media
 from apps.media.serializers import MediaSerializer
@@ -52,6 +50,50 @@ class Category(models.Model):
         return 'No Thumbnail'
 
     thumbnail_preview.short_description = "Thumbnail Preview"
+
+
+class CategoryView(models.Model):
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='category_view')
+    ip_address = models.GenericIPAddressField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+
+class CategoryAnalytics(models.Model):
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    category = models.OneToOneField(Category, on_delete=models.CASCADE, related_name='category_analytics')
+    
+    views = models.PositiveIntegerField(default=0)
+    impressions = models.PositiveIntegerField(default=0)
+    clicks = models.PositiveIntegerField(default=0)
+    click_through_rate = models.FloatField(default=0)
+    avg_time_on_page = models.FloatField(default=0)
+
+    def _update_click_through_rate(self):
+        if self.impressions > 0:
+            self.click_through_rate = (self.clicks/self.impressions) * 100
+        else:
+            self.click_through_rate = 0
+        self.save()
+
+    def increment_click(self):
+        self.clicks += 1
+        self.save()
+        self._update_click_through_rate()
+    
+    def increment_impression(self):
+        self.impressions += 1
+        self.save()
+        self._update_click_through_rate()
+
+    def increment_view(self, ip_address):
+        if not CategoryView.objects.filter(category=self.category, ip_address=ip_address).exists():
+            CategoryView.objects.create(category=self.category, ip_address=ip_address)
+            
+            self.views += 1
+            self.save()
 
 
 class Post(models.Model):
@@ -119,7 +161,7 @@ class PostView(models.Model):
 class PostAnalytics(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='post_analytics')
+    post = models.OneToOneField(Post, on_delete=models.CASCADE, related_name='post_analytics')
     
     views = models.PositiveIntegerField(default=0)
     impressions = models.PositiveIntegerField(default=0)
@@ -186,3 +228,8 @@ class Heading(models.Model):
 def create_post_analytics(sender, instance, created, **kwargs):
     if created:
         PostAnalytics.objects.create(post=instance)
+
+@receiver(post_save, sender=Category)
+def create_category_analytics(sender, instance, created, **kwargs):
+    if created:
+        CategoryAnalytics.objects.create(category=instance)
